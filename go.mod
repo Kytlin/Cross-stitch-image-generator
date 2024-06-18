@@ -1,4 +1,4 @@
-module github/cross-stitch-tool
+module github.com/Kytlin/Cross-stitch-image-generator
 
 go 1.22.3
 
