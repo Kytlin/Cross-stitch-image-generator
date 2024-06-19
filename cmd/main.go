@@ -65,5 +65,18 @@ func main() {
 		fmt.Println("Error loading thread colours:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Thread colours loaded successfully: %v\n", threadColours)
+	fmt.Println("Thread colours loaded successfully")
+
+	reducedImg := imageprocessing.ReduceColors(resizedImg, threadColours)
+
+	reducedOutputFilePath := "reduced_" + filepath.Base(outputFilePath)
+	err = imageprocessing.SaveImage(reducedOutputFilePath, reducedImg)
+	if err != nil {
+		fmt.Println("Error saving reduced color image:", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Image resized, color-reduced, and saved successfully to", reducedOutputFilePath)
+
+	imageprocessing.GenerateGrid(reducedImg, threadColours)
 }
