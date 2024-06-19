@@ -59,4 +59,11 @@ func main() {
 	}
 
 	fmt.Println("Image resized and saved successfully to", outputFilePath)
+
+	threadColours, err := imageprocessing.LoadThreadColours("assets/thread_colours.txt")
+	if err != nil {
+		fmt.Println("Error loading thread colours:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("Thread colours loaded successfully: %v\n", threadColours)
 }
