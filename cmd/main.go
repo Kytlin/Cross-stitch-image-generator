@@ -2,81 +2,116 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"image"
 	"strconv"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/Kytlin/Cross-stitch-image-generator/pkg/imageprocessing"
 )
 
-// validateArguments ensures the correct number of arguments.
-func validateArguments() (string, int, string, string) {
-	if len(os.Args) < 4 || len(os.Args) > 5 {
-		fmt.Println("Usage: go run main.go resize [height] [input_image] [output_image (optional)]")
-		os.Exit(1)
-	}
-
-	imgOption := os.Args[1]
-	imgHeight, err := strconv.Atoi(os.Args[2])
-	if err != nil {
-		fmt.Println("Error: Invalid height. Please provide a valid integer.")
-		os.Exit(1)
-	}
-	inputFilePath := os.Args[3]
-
-	var outputFilePath string
-	if len(os.Args) == 5 {
-		outputFilePath = os.Args[4]
-	} else {
-		baseName := filepath.Base(inputFilePath)
-		ext := filepath.Ext(baseName)
-		outputFilePath = "resized_" + baseName[:len(baseName)-len(ext)] + ext
-	}
-
-	return imgOption, imgHeight, inputFilePath, outputFilePath
-}
-
 func main() {
-	imgOption, imgHeight, inputFilePath, outputFilePath := validateArguments()
+	myApp := app.New()
+	myWindow := myApp.NewWindow("Cross Stitch Image Generator")
 
-	if imgOption != "resize" {
-		fmt.Println("Error: Unsupported operation. Only 'resize' is supported.")
-		os.Exit(1)
-	}
+	// Image processing UI components
+	label := widget.NewLabel("Select a folder to upload an image:")
+	heightEntry := widget.NewEntry()
+	heightEntry.SetPlaceHolder("Enter new height")
 
-	img, err := imageprocessing.LoadImage(inputFilePath)
-	if err != nil {
-		fmt.Println("Error loading image:", err)
-		os.Exit(1)
-	}
+	colorCountEntry := widget.NewEntry()
+	colorCountEntry.SetPlaceHolder("Enter number of colors")
 
-	resizedImg := imageprocessing.ResizeImage(img, imgHeight)
+	// Image display canvas
+	imageCanvas := canvas.NewImageFromImage(nil)
+	imageCanvas.FillMode = canvas.ImageFillOriginal
 
-	err = imageprocessing.SaveImage(outputFilePath, resizedImg)
-	if err != nil {
-		fmt.Println("Error saving image:", err)
-		os.Exit(1)
-	}
+	var resizedImage image.Image
+	uploadButton := widget.NewButton("Select Folder", func() {
+		dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
+			if err != nil {
+				dialog.ShowError(err, myWindow)
+				return
+			}
+			if uri == nil {
+				return
+			}
 
-	fmt.Println("Image resized and saved successfully to", outputFilePath)
+			// Create a file dialog to select the image file within the chosen folder
+			fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+				if err != nil {
+					dialog.ShowError(err, myWindow)
+					return
+				}
+				if reader == nil {
+					return
+				}
+				defer reader.Close()
 
-	threadColours, err := imageprocessing.LoadThreadColours("assets/thread_colours.txt")
-	if err != nil {
-		fmt.Println("Error loading thread colours:", err)
-		os.Exit(1)
-	}
-	fmt.Println("Thread colours loaded successfully")
+				img, _, err := image.Decode(reader)
+				if err != nil {
+					dialog.ShowError(err, myWindow)
+					return
+				}
 
-	reducedImg := imageprocessing.ReduceColors(resizedImg, threadColours)
+				// Get the new height from the entry
+				newHeight, err := strconv.Atoi(heightEntry.Text)
+				if err != nil {
+					dialog.ShowError(fmt.Errorf("invalid height: %w", err), myWindow)
+					return
+				}
 
-	reducedOutputFilePath := "reduced_" + filepath.Base(outputFilePath)
-	err = imageprocessing.SaveImage(reducedOutputFilePath, reducedImg)
-	if err != nil {
-		fmt.Println("Error saving reduced color image:", err)
-		os.Exit(1)
-	}
+				// Resize the image
+				resizedImg := imageprocessing.ResizeImage(img, newHeight)
 
-	fmt.Println("Image resized, color-reduced, and saved successfully to", reducedOutputFilePath)
+				// Display the resized image on the canvas
+				imageCanvas.Image = resizedImg
+				imageCanvas.Refresh()
 
-	imageprocessing.GenerateGrid(reducedImg, threadColours)
+				// Store the resized image for further processing
+				resizedImage = resizedImg
+			}, myWindow)
+			fileDialog.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".jpg", ".jpeg"}))
+			fileDialog.SetLocation(uri) // Set the location to the selected folder
+			fileDialog.Show()
+		}, myWindow).Show()
+	})
+
+	legend := widget.NewLabel("Color Legend:")
+
+	generateButton := widget.NewButton("Generate", func() {
+		if resizedImage == nil {
+			dialog.ShowError(fmt.Errorf("no image selected"), myWindow)
+			return
+		}
+
+		// Get the number of colors from the entry
+		numColors, err := strconv.Atoi(colorCountEntry.Text)
+		if err != nil || numColors <= 0 {
+			dialog.ShowError(fmt.Errorf("invalid number of colors: %w", err), myWindow)
+			return
+		}
+
+		// threadColors := imageprocessing.getPartialPalette(resizedImage, numColors) [TODO]
+	})
+
+	// Set the content of the window
+	myWindow.SetContent(container.NewVBox(
+		label,
+		heightEntry,
+		colorCountEntry,
+		uploadButton,
+		generateButton,
+		imageCanvas,
+		legend,
+	))
+
+	myWindow.Resize(fyne.NewSize(1400, 950))
+	myWindow.ShowAndRun()
 }
