@@ -25,14 +25,14 @@ func main() {
 	heightEntry := widget.NewEntry()
 	heightEntry.SetPlaceHolder("Enter new height")
 
-	colorCountEntry := widget.NewEntry()
-	colorCountEntry.SetPlaceHolder("Enter number of colors")
+	numColoursEntry := widget.NewEntry()
+	numColoursEntry.SetPlaceHolder("Number of Colours")
 
 	// Image display canvas
 	imageCanvas := canvas.NewImageFromImage(nil)
 	imageCanvas.FillMode = canvas.ImageFillOriginal
 
-	var resizedImage image.Image
+	var currentImage image.Image
 	uploadButton := widget.NewButton("Select Folder", func() {
 		dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
 			if err != nil {
@@ -68,14 +68,11 @@ func main() {
 				}
 
 				// Resize the image
-				resizedImg := imageprocessing.ResizeImage(img, newHeight)
+				currentImage = imageprocessing.ResizeImage(img, newHeight)
 
 				// Display the resized image on the canvas
-				imageCanvas.Image = resizedImg
+				imageCanvas.Image = currentImage
 				imageCanvas.Refresh()
-
-				// Store the resized image for further processing
-				resizedImage = resizedImg
 			}, myWindow)
 			fileDialog.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".jpg", ".jpeg"}))
 			fileDialog.SetLocation(uri) // Set the location to the selected folder
@@ -85,27 +82,50 @@ func main() {
 
 	legend := widget.NewLabel("Color Legend:")
 
+	// Generate button
 	generateButton := widget.NewButton("Generate", func() {
-		if resizedImage == nil {
-			dialog.ShowError(fmt.Errorf("no image selected"), myWindow)
+		imgHeight, err := strconv.Atoi(heightEntry.Text)
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("Invalid height value"), myWindow)
+			return
+		}
+		numColours, err := strconv.Atoi(numColoursEntry.Text)
+		if err != nil || numColours < 10 || numColours > 50 {
+			dialog.ShowError(fmt.Errorf("Number of colours must be between 10 and 50"), myWindow)
 			return
 		}
 
-		// Get the number of colors from the entry
-		numColors, err := strconv.Atoi(colorCountEntry.Text)
-		if err != nil || numColors <= 0 {
-			dialog.ShowError(fmt.Errorf("invalid number of colors: %w", err), myWindow)
+		if currentImage == nil {
+			dialog.ShowError(fmt.Errorf("No image loaded"), myWindow)
 			return
 		}
 
-		// threadColors := imageprocessing.getPartialPalette(resizedImage, numColors) [TODO]
+		resizedImg := imageprocessing.ResizeImage(currentImage, imgHeight)
+		threadColours, err := imageprocessing.LoadThreadColours("assets/thread_colours.txt")
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("Failed to load thread colours"), myWindow)
+			return
+		}
+
+		threadPalette := imageprocessing.GetPartialPalette(resizedImg, threadColours, numColours)
+		reducedImg := imageprocessing.ReduceColors(resizedImg, threadPalette)
+
+		fmt.Println(threadPalette)
+
+		// Ensure the resized and color-reduced image is displayed correctly
+		imageCanvas.Image = reducedImg
+		imageCanvas.Refresh()
+
+		currentImage = reducedImg
+
+		dialog.ShowInformation("Success", "Image processed successfully", myWindow)
 	})
 
 	// Set the content of the window
 	myWindow.SetContent(container.NewVBox(
 		label,
 		heightEntry,
-		colorCountEntry,
+		numColoursEntry,
 		uploadButton,
 		generateButton,
 		imageCanvas,

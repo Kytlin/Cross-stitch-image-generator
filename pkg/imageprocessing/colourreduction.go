@@ -5,17 +5,13 @@ import (
 	"image"
 	"image/color"
 	"log"
-	"math"
 	"os"
 	"strconv"
 	"strings"
-)
 
-type ThreadColour struct {
-	ID     int
-	Name   string
-	Colour color.RGBA
-}
+	"github.com/Kytlin/Cross-stitch-image-generator/pkg/colourmath"
+	"github.com/Kytlin/Cross-stitch-image-generator/pkg/common"
+)
 
 func ColourAtoi(s string) uint8 {
 	i, err := strconv.Atoi(s)
@@ -26,7 +22,7 @@ func ColourAtoi(s string) uint8 {
 	return uint8(i)
 }
 
-func LoadThreadColours(filePath string) ([455]ThreadColour, error) {
+func LoadThreadColours(filePath string) ([]common.ThreadColour, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Fatalf("failed to open file: %s", err)
@@ -35,8 +31,7 @@ func LoadThreadColours(filePath string) ([455]ThreadColour, error) {
 
 	scanner := bufio.NewScanner(file)
 
-	var threadImg [455]ThreadColour
-	threadIdx := 0
+	var threadImg []common.ThreadColour
 	for scanner.Scan() {
 		line := scanner.Text()
 
@@ -55,14 +50,13 @@ func LoadThreadColours(filePath string) ([455]ThreadColour, error) {
 		}
 		name = strings.Join(parts[1:lineIdx], " ")
 
-		threadColour := ThreadColour{
+		ThreadColour := common.ThreadColour{
 			ID:     id,
 			Name:   name,
 			Colour: color.RGBA{R: ColourAtoi(parts[lineIdx-1]), G: ColourAtoi(parts[lineIdx]), B: ColourAtoi(parts[lineIdx+1])},
 		}
 
-		threadImg[threadIdx] = threadColour
-		threadIdx += 1
+		threadImg = append(threadImg, ThreadColour)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -71,49 +65,17 @@ func LoadThreadColours(filePath string) ([455]ThreadColour, error) {
 	return threadImg, err
 }
 
-func ReduceColors(img image.Image, palette [455]ThreadColour) image.Image {
+func ReduceColors(img image.Image, palette []common.ThreadColour) image.Image {
 	bounds := img.Bounds()
 	reducedImg := image.NewRGBA(bounds)
 
 	for y := bounds.Min.Y; y < bounds.Max.Y; y += 1 {
 		for x := bounds.Min.X; x < bounds.Max.X; x += 1 {
 			originalColour := img.At(x, y)
-			nearestColour := findNearestColour(originalColour, palette)
-			reducedImg.Set(x, y, nearestColour)
+			nearestColour := colourmath.NearestColour(originalColour, palette)
+			reducedImg.Set(x, y, nearestColour.Colour)
 		}
 	}
 
 	return reducedImg
-}
-
-func findNearestColour(originalColour color.Color, palette [455]ThreadColour) color.Color {
-	rImg, gImg, bImg, _ := originalColour.RGBA()
-	rImg, gImg, bImg = rImg>>8, gImg>>8, bImg>>8
-	minDistance := math.MaxFloat64
-	var nearestColor color.Color
-
-	for _, threadColour := range palette {
-		rPal := uint8(threadColour.Colour.R)
-		gPal := uint8(threadColour.Colour.G)
-		bPal := uint8(threadColour.Colour.B)
-
-		distance := colorDistance(rImg, gImg, bImg, rPal, gPal, bPal)
-		if distance < minDistance {
-			minDistance = distance
-			nearestColor = color.RGBA{
-				R: rPal,
-				G: gPal,
-				B: bPal,
-			}
-		}
-	}
-
-	return nearestColor
-}
-
-func colorDistance(rImg, gImg, bImg uint32, rPal, gPal, bPal uint8) float64 {
-	return math.Sqrt(
-		float64((rImg-uint32(rPal))*(rImg-uint32(rPal)) +
-			(gImg-uint32(gPal))*(gImg-uint32(gPal)) +
-			(bImg-uint32(bPal))*(bImg-uint32(bPal))))
 }

@@ -4,6 +4,7 @@ go 1.22.3
 
 require (
 	fyne.io/fyne/v2 v2.4.5
+	github.com/ericpauley/go-quantize v0.0.0-20200331213906-ae555eb2afa4
 	golang.org/x/image v0.17.0
 )
 
