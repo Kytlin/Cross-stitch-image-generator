@@ -13,8 +13,11 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/Kytlin/Cross-stitch-image-generator/pkg/common"
 	"github.com/Kytlin/Cross-stitch-image-generator/pkg/imageprocessing"
 )
+
+var threadPalette []common.ThreadColour
 
 func main() {
 	myApp := app.New()
@@ -80,9 +83,52 @@ func main() {
 		}, myWindow).Show()
 	})
 
-	legend := widget.NewLabel("Color Legend:")
+	legend := widget.NewTableWithHeaders(func() (int, int) {
+		return len(threadPalette), 3
+	},
+		func() fyne.CanvasObject {
+			l := widget.NewLabel("")
+			return l
+		},
+		func(id widget.TableCellID, o fyne.CanvasObject) {
+			l := o.(*widget.Label)
+			l.Truncation = fyne.TextTruncateEllipsis
+			switch id.Col {
+			case 0:
+				// This uses a lookup table
+				l.SetText("[symbol]")
+			case 1:
+				l.SetText("DMC " + strconv.Itoa(threadPalette[id.Row].ID))
+			case 2:
+				l.SetText(threadPalette[id.Row].Name)
+			}
+		})
+	legend.SetColumnWidth(0, 80)
+	legend.SetColumnWidth(1, 120)
+	legend.SetColumnWidth(2, 450)
 
-	// Generate button
+	legend.CreateHeader = func() fyne.CanvasObject {
+		return widget.NewButton("000", func() {})
+	}
+	legend.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
+		b := o.(*widget.Button)
+		if id.Col == -1 {
+			b.SetText(strconv.Itoa(id.Row))
+			b.Importance = widget.LowImportance
+			b.Disable()
+		} else {
+			switch id.Col {
+			case 0:
+				b.SetText("Symbol")
+			case 1:
+				b.SetText("Number")
+			case 2:
+				b.SetText("Name")
+			}
+			b.Refresh()
+		}
+	}
+
 	generateButton := widget.NewButton("Generate", func() {
 		imgHeight, err := strconv.Atoi(heightEntry.Text)
 		if err != nil {
@@ -115,6 +161,8 @@ func main() {
 		// Ensure the resized and color-reduced image is displayed correctly
 		imageCanvas.Image = reducedImg
 		imageCanvas.Refresh()
+
+		legend.Refresh()
 
 		currentImage = reducedImg
 
