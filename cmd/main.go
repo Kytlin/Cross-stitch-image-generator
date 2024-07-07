@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"image"
+	"image/color"
+	"io/ioutil"
+	"os"
 	"strconv"
 
 	"fyne.io/fyne/v2"
@@ -11,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/Kytlin/Cross-stitch-image-generator/pkg/common"
@@ -19,9 +23,58 @@ import (
 
 var threadPalette []common.ThreadColour
 
+// loadCustomFont reads and loads a TTF font from the given path.
+func loadCustomFont(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	fontBytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	return fontBytes, nil
+}
+
+// myTheme is a custom Fyne theme that uses a custom font.
+type myTheme struct {
+	font fyne.Resource
+}
+
+func (m *myTheme) Font(style fyne.TextStyle) fyne.Resource {
+	return m.font
+}
+
+func (m *myTheme) Size(name fyne.ThemeSizeName) float32 {
+	return theme.DefaultTheme().Size(name)
+}
+
+func (m *myTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+	return theme.DefaultTheme().Color(name, variant)
+}
+
+func (m *myTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+	return theme.DefaultTheme().Icon(name)
+}
+
 func main() {
 	myApp := app.New()
 	myWindow := myApp.NewWindow("Cross Stitch Image Generator")
+
+	fontPath := "assets/DejaVuSans.ttf"
+	customFont, err := loadCustomFont(fontPath)
+	if err != nil {
+		fmt.Println("Failed to load custom font: %v", err)
+	}
+
+	// Create a label with Unicode symbols
+	unicodeLabel := widget.NewLabel("Unicode Symbols: \u2764\u2600\u2601") // Example symbols
+
+	// Apply custom font
+	customFontResource := fyne.NewStaticResource("CustomFont", customFont)
+	fyne.CurrentApp().Settings().SetTheme(&myTheme{font: customFontResource})
 
 	// Image processing UI components
 	label := widget.NewLabel("Select a folder to upload an image:")
@@ -178,6 +231,7 @@ func main() {
 		generateButton,
 		imageCanvas,
 		legend,
+		unicodeLabel,
 	))
 
 	myWindow.Resize(fyne.NewSize(1400, 950))
