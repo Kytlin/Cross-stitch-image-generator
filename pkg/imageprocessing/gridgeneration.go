@@ -26,6 +26,24 @@ func GenerateGrid(img image.Image, threadColors []common.ThreadColour) [][]strin
 	return grid
 }
 
+func GenerateColourGrid(img image.Image, threadColors []common.ThreadColour) [][]common.ThreadColour {
+	bounds := img.Bounds()
+	grid := make([][]common.ThreadColour, bounds.Dy())
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		row := make([]common.ThreadColour, bounds.Dx())
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			color := img.At(x, y).(color.RGBA)
+			row[x] = findThreadColorObj(color, threadColors)
+		}
+		grid[y] = row
+	}
+
+	// fmt.Printf("size: %s %s", len(grid), len(grid[0]))
+
+	return grid
+}
+
 func findThreadColorName(c color.RGBA, threadColors []common.ThreadColour) string {
 	for _, tc := range threadColors {
 		if tc.Colour == c {
@@ -33,6 +51,15 @@ func findThreadColorName(c color.RGBA, threadColors []common.ThreadColour) strin
 		}
 	}
 	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
+}
+
+func findThreadColorObj(c color.RGBA, threadColors []common.ThreadColour) common.ThreadColour {
+	for _, tc := range threadColors {
+		if tc.Colour == c {
+			return tc
+		}
+	}
+	return colourmath.NearestColour(c, threadColors)
 }
 
 // GetPartialPalette generates a palette of k colors from the image using available thread colors
