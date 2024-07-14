@@ -18,10 +18,15 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/math/fixed"
 
 	"github.com/Kytlin/Cross-stitch-image-generator/pkg/common"
 	"github.com/Kytlin/Cross-stitch-image-generator/pkg/imageprocessing"
 )
+
+var originalImage image.Image
 
 var threadPalette []common.ThreadColour
 var rectangles [][]*canvas.Rectangle
@@ -72,9 +77,6 @@ func main() {
 		fmt.Println("Failed to load custom font: %v", err)
 	}
 
-	// Create a label with Unicode symbols
-	//unicodeLabel := widget.NewLabel("Unicode Symbols: \u2764\u2600\u2601") // Example symbols
-
 	// Apply custom font
 	customFontResource := fyne.NewStaticResource("CustomFont", customFont)
 	fyne.CurrentApp().Settings().SetTheme(&myTheme{font: customFontResource})
@@ -115,7 +117,7 @@ func main() {
 	imageCanvas.FillMode = canvas.ImageFillOriginal
 
 	legend := getLegend()
-	uploadButton, generateButton := getUploadAndGenerateButtons(heightLabel, numColoursLabel, legend, myWindow, imageCanvas)
+	uploadButton, updateButton, generateButton := getUploadAndGenerateButtons(heightSlider, heightLabel, numColoursLabel, legend, myWindow, imageCanvas, customFont)
 
 	myWindow.SetContent(container.NewVBox(
 		label,
@@ -124,6 +126,7 @@ func main() {
 		numColoursLabel,
 		numColoursSlider,
 		uploadButton,
+		updateButton,
 		generateButton,
 		imageCanvas,
 		legend,
@@ -134,9 +137,7 @@ func main() {
 	myWindow.ShowAndRun()
 }
 
-func getUploadAndGenerateButtons(heightEntry *widget.Label, numColoursEntry *widget.Label, legend fyne.CanvasObject, myWindow fyne.Window, imageCanvas *canvas.Image) (fyne.CanvasObject, fyne.CanvasObject) {
-	var currentImage image.Image
-
+func getUploadAndGenerateButtons(heightSlider *widget.Slider, heightEntry *widget.Label, numColoursEntry *widget.Label, legend fyne.CanvasObject, myWindow fyne.Window, imageCanvas *canvas.Image, customFont []byte) (fyne.CanvasObject, fyne.CanvasObject, fyne.CanvasObject) {
 	currentDir, _ := os.Getwd()
 	curUri := storage.NewFileURI(currentDir)
 	uri, _ := storage.ListerForURI(curUri)
@@ -168,18 +169,16 @@ func getUploadAndGenerateButtons(heightEntry *widget.Label, numColoursEntry *wid
 				return
 			}
 
-			// Get the new height from the entry
-			newHeight, err := strconv.Atoi(heightEntry.Text)
-			if err != nil {
-				dialog.ShowError(fmt.Errorf("invalid height: %w", err), myWindow)
-				return
-			}
+			originalImage = img
 
-			// Resize the image
-			currentImage = imageprocessing.ResizeImage(img, newHeight)
+			// Set the image and initial size of the canvas.Image widget
+			imageCanvas.Image = img
+			imageCanvas.SetMinSize(fyne.NewSize(float32(img.Bounds().Dx()), float32(heightSlider.Value)))
 
-			// Display the resized image on the canvas
-			imageCanvas.Image = currentImage
+			// Resize the canvas widget itself
+			imageCanvas.Resize(fyne.NewSize(float32(img.Bounds().Dx()), float32(heightSlider.Value)))
+
+			// Refresh the canvas
 			imageCanvas.Refresh()
 		}, myWindow)
 		fileDialog.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".jpg", ".jpeg"}))
@@ -187,25 +186,49 @@ func getUploadAndGenerateButtons(heightEntry *widget.Label, numColoursEntry *wid
 		fileDialog.Show()
 	})
 
-	// Generate
-	generateButton := widget.NewButton("Generate", func() {
-		imgHeight, err := strconv.Atoi(heightEntry.Text)
-		if err != nil {
-			dialog.ShowError(fmt.Errorf("Invalid height value"), myWindow)
+	// Resize
+	updateButton := widget.NewButton("Update Image Size", func() {
+		if originalImage == nil {
 			return
 		}
+
+		originalWidth := float64(originalImage.Bounds().Dx())
+		originalHeight := float64(originalImage.Bounds().Dy())
+		newHeight := heightSlider.Value
+		newWidth := (originalWidth / originalHeight) * newHeight
+
+		// Create a new canvas.Image with the resized image
+		resizedImage := canvas.NewImageFromImage(originalImage)
+		resizedImage.FillMode = canvas.ImageFillOriginal
+
+		// Set the minimum size of the canvas.Image widget
+		resizedImage.SetMinSize(fyne.NewSize(float32(newWidth), float32(newHeight)))
+
+		// Update the canvas.Image widget
+		imageCanvas.Image = resizedImage.Image
+
+		// Set the size of the canvas widget itself
+		imageCanvas.Resize(fyne.NewSize(float32(newWidth), float32(newHeight)))
+
+		// Refresh the canvas to trigger a redraw
+		imageCanvas.Refresh()
+	})
+
+	// Generate
+	generateButton := widget.NewButton("Generate", func() {
+		imgHeight := heightSlider.Value
 		numColours, err := strconv.Atoi(numColoursEntry.Text)
 		if err != nil || numColours < 10 || numColours > 200 {
 			dialog.ShowError(fmt.Errorf("Number of colours must be between 10 and 50"), myWindow)
 			return
 		}
 
-		if currentImage == nil {
+		if originalImage == nil {
 			dialog.ShowError(fmt.Errorf("No image loaded"), myWindow)
 			return
 		}
 
-		resizedImg := imageprocessing.ResizeImage(currentImage, imgHeight)
+		resizedImg := imageprocessing.ResizeImage(originalImage, int(imgHeight))
 		threadColours, err := imageprocessing.LoadThreadColours("assets/thread_colours.txt")
 		if err != nil {
 			dialog.ShowError(fmt.Errorf("Failed to load thread colours"), myWindow)
@@ -220,8 +243,8 @@ func getUploadAndGenerateButtons(heightEntry *widget.Label, numColoursEntry *wid
 		// Ensure the resized and color-reduced image is displayed correctly
 		imageCanvas.Image = resizedImg
 
-		colourGrid := imageprocessing.GenerateColourGrid(reducedImg, []common.ThreadColour{}, false)
-		gridImage := generateImageFromGrid(colourGrid, false, false)
+		colourGrid := imageprocessing.GenerateColourGrid(reducedImg, threadColours, true)
+		gridImage := generateImageFromGrid(colourGrid, true, false, customFont)
 		updateGrid(colourGrid)
 
 		imageCanvas.Image = gridImage
@@ -230,12 +253,12 @@ func getUploadAndGenerateButtons(heightEntry *widget.Label, numColoursEntry *wid
 		legend = getLegend()
 		legend.Refresh()
 
-		currentImage = reducedImg
+		originalImage = reducedImg
 
 		dialog.ShowInformation("Success", "Image processed successfully", myWindow)
 	})
 
-	return uploadButton, generateButton
+	return uploadButton, updateButton, generateButton
 }
 
 func getLegend() fyne.CanvasObject {
@@ -260,7 +283,7 @@ func getLegend() fyne.CanvasObject {
 			if threadPalette != nil && id.Row < len(threadPalette) {
 				switch id.Col {
 				case 0:
-					l.SetText("[symbol]")
+					l.SetText(threadPalette[id.Row].Symbol)
 				case 1:
 					l.SetText("DMC " + strconv.Itoa(threadPalette[id.Row].ID))
 				case 2:
@@ -305,7 +328,7 @@ func getLegend() fyne.CanvasObject {
 	return scrollContainer
 }
 
-func generateImageFromGrid(grid [][]common.ThreadColour, showSymbol bool, useStich bool) image.Image {
+func generateImageFromGrid(grid [][]common.ThreadColour, showSymbol bool, useStich bool, customFont []byte) image.Image {
 	numRows := len(grid)
 	numCols := len(grid[0])
 
@@ -341,24 +364,30 @@ func generateImageFromGrid(grid [][]common.ThreadColour, showSymbol bool, useSti
 			}
 
 			if showSymbol {
-				// fnt, _ := opentype.Parse(customFont)
-				// face, _ := opentype.NewFace(fnt, &opentype.FaceOptions{
-				//  Size:    float64(cellSize),
-				//  DPI:     72,
-				//  Hinting: font.HintingFull,
-				// })
-				// defer face.Close()
-				// drawer := &font.Drawer{
-				//  Dst: img,
-				//  Src: image.White,
-				//  Face: face,
-				// }
-				// drawer.Dot = fixed.Point26_6{
-				//  X: fixed.I(x + cellSize/4),
-				//  Y: fixed.I(y + cellSize - cellSize/4),
-				// }
-				// symbol := string(cell.Symbol)
-				// drawer.DrawString(symbol)
+				fnt, _ := opentype.Parse(customFont)
+				face, _ := opentype.NewFace(fnt, &opentype.FaceOptions{
+					Size:    float64(cellSize),
+					DPI:     72,
+					Hinting: font.HintingFull,
+				})
+				defer face.Close()
+
+				fontColour := image.White
+				if (float32(cell.Colour.R)*0.299 + float32(cell.Colour.G)*0.587 + float32(cell.Colour.B)*0.114) > 186 {
+					fontColour = image.Black
+				}
+
+				drawer := &font.Drawer{
+					Dst:  img,
+					Src:  fontColour,
+					Face: face,
+				}
+				drawer.Dot = fixed.Point26_6{
+					X: fixed.I(x + cellSize/4),
+					Y: fixed.I(y + cellSize - cellSize/4),
+				}
+				symbol := cell.Symbol
+				drawer.DrawString(symbol)
 			}
 
 			// Border around cell

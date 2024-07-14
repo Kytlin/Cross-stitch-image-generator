@@ -36,10 +36,12 @@ func GenerateColourGrid(img image.Image, threadColors []common.ThreadColour, get
 			color := img.At(x, y).(color.RGBA)
 
 			if getNearestColour {
-				row[x] = findThreadColorObj(color, threadColors)
+				row[x] = colourmath.NearestColour(color, threadColors)
+				fmt.Println(row[x].Colour)
 			} else {
 				row[x] = common.ThreadColour{
 					Colour: color,
+					Symbol: "a",
 				}
 			}
 		}
@@ -58,14 +60,14 @@ func findThreadColorName(c color.RGBA, threadColors []common.ThreadColour) strin
 	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
 }
 
-func findThreadColorObj(c color.RGBA, threadColors []common.ThreadColour) common.ThreadColour {
-	for _, tc := range threadColors {
-		if tc.Colour == c {
-			return tc
-		}
-	}
-	return colourmath.NearestColour(c, threadColors)
-}
+// func findThreadColorObj(c color.RGBA, threadColors []common.ThreadColour) common.ThreadColour {
+// 	for _, tc := range threadColors {
+// 		if tc.Colour == c {
+// 			return tc
+// 		}
+// 	}
+// 	return colourmath.NearestColour(c, threadColors)
+// }
 
 // GetPartialPalette generates a palette of k colors from the image using available thread colors
 func GetPartialPalette(img image.Image, threadColours []common.ThreadColour, k int) []common.ThreadColour {
