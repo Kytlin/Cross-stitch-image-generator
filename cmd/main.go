@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -14,7 +15,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -114,7 +114,6 @@ func main() {
 	imageCanvas := canvas.NewImageFromImage(nil)
 	imageCanvas.FillMode = canvas.ImageFillOriginal
 
-	gridContainer := getGridContainer()
 	legend := getLegend()
 	uploadButton, generateButton := getUploadAndGenerateButtons(heightLabel, numColoursLabel, legend, myWindow, imageCanvas)
 
@@ -127,7 +126,6 @@ func main() {
 		uploadButton,
 		generateButton,
 		imageCanvas,
-		gridContainer,
 		legend,
 		// unicodeLabel,
 	))
@@ -222,10 +220,11 @@ func getUploadAndGenerateButtons(heightEntry *widget.Label, numColoursEntry *wid
 		// Ensure the resized and color-reduced image is displayed correctly
 		imageCanvas.Image = resizedImg
 
-		colourGrid := imageprocessing.GenerateColourGrid(reducedImg, threadColours)
-		_ = colourGrid
-		// fmt.Println(colourGrid[20][20].ID, colourGrid[20][20].Name) [test colour output]
+		colourGrid := imageprocessing.GenerateColourGrid(reducedImg, []common.ThreadColour{}, false)
+		gridImage := generateImageFromGrid(colourGrid, false, false)
 		updateGrid(colourGrid)
+
+		imageCanvas.Image = gridImage
 
 		imageCanvas.Refresh()
 		legend = getLegend()
@@ -268,9 +267,10 @@ func getLegend() fyne.CanvasObject {
 					l.SetText(threadPalette[id.Row].Name)
 				case 3:
 					l.Hide()
-					i.StrokeColor = threadPalette[id.Row].Colour
+					colour := threadPalette[id.Row].Colour
+					colour.A = 255
+					i.FillColor = colour
 					i.SetMinSize(fyne.NewSize(20, 20))
-					// i.Refresh() [not updating rectangle?]
 					i.Show()
 				}
 			}
@@ -305,37 +305,73 @@ func getLegend() fyne.CanvasObject {
 	return scrollContainer
 }
 
-func getGridContainer() *fyne.Container {
-	gridWidth, gridHeight := 400, 400
-	numColumns := 30
-	numRows := 30
+func generateImageFromGrid(grid [][]common.ThreadColour, showSymbol bool, useStich bool) image.Image {
+	numRows := len(grid)
+	numCols := len(grid[0])
 
-	// Calculate the size of each square
-	squareSize := fyne.NewSize(float32(gridWidth/numColumns), float32(gridHeight/numRows))
+	cellSize := 20
+	imgWidth := numCols * cellSize
+	imgHeight := numRows * cellSize
 
-	// Create a grid with squares
-	rectangles = make([][]*canvas.Rectangle, numRows)
-	rectObjs := make([]fyne.CanvasObject, numColumns*numRows)
+	img := image.NewRGBA(image.Rect(0, 0, imgWidth, imgHeight))
+
 	for row := 0; row < numRows; row++ {
-		rectangles[row] = make([]*canvas.Rectangle, numColumns)
-		for col := 0; col < numColumns; col++ {
-			index := row*numColumns + col
-			rect := canvas.NewRectangle(color.Black)
-			rect.SetMinSize(squareSize)
+		for col := 0; col < numCols; col++ {
+			cell := grid[row][col]
+			x := col * cellSize
+			y := row * cellSize
 
-			label := widget.NewLabel("a")
-			cont := container.NewStack(rect, label)
-			_ = cont
-			rectangles[row][col] = rect
-			rectObjs[index] = rect
+			cellColor := cell.Colour
+			cellColor.A = 255
+
+			if useStich {
+				stitchThickness := 3
+
+				for i := 0; i < cellSize; i++ {
+					for t := 0; t < stitchThickness; t++ {
+						img.Set(x+i, y+i+t, cellColor)            // top left diagonal
+						img.Set(x+i, y+cellSize-1-i-t, cellColor) // bottom left diagonal
+						img.Set(x+i+t, y+i, cellColor)            // top left diagonal (offset)
+						img.Set(x+i+t, y+cellSize-1-i, cellColor) // bottom left diagonal (offset)
+					}
+				}
+			} else {
+				// Fill with color
+				draw.Draw(img, image.Rect(x, y, x+cellSize, y+cellSize), &image.Uniform{cellColor}, image.Point{}, draw.Src)
+			}
+
+			if showSymbol {
+				// fnt, _ := opentype.Parse(customFont)
+				// face, _ := opentype.NewFace(fnt, &opentype.FaceOptions{
+				//  Size:    float64(cellSize),
+				//  DPI:     72,
+				//  Hinting: font.HintingFull,
+				// })
+				// defer face.Close()
+				// drawer := &font.Drawer{
+				//  Dst: img,
+				//  Src: image.White,
+				//  Face: face,
+				// }
+				// drawer.Dot = fixed.Point26_6{
+				//  X: fixed.I(x + cellSize/4),
+				//  Y: fixed.I(y + cellSize - cellSize/4),
+				// }
+				// symbol := string(cell.Symbol)
+				// drawer.DrawString(symbol)
+			}
+
+			// Border around cell
+			borderColor := color.Black
+			borderThickness := 1
+			draw.Draw(img, image.Rect(x, y, x+cellSize, y+borderThickness), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+			draw.Draw(img, image.Rect(x, y, x+borderThickness, y+cellSize), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+			draw.Draw(img, image.Rect(x, y+cellSize-borderThickness, x+cellSize, y+cellSize), &image.Uniform{borderColor}, image.Point{}, draw.Src)
+			draw.Draw(img, image.Rect(x+cellSize-borderThickness, y, x+cellSize, y+cellSize), &image.Uniform{borderColor}, image.Point{}, draw.Src)
 		}
 	}
 
-	grid := container.New(layout.NewGridLayoutWithColumns(numColumns), rectObjs...)
-
-	gridContainer := container.New(layout.NewCenterLayout(), grid)
-	gridContainer.Resize(fyne.NewSize(float32(gridWidth), float32(gridHeight)))
-	return gridContainer
+	return img
 }
 
 func updateRectangleColor(row, col int, threadColour common.ThreadColour) {

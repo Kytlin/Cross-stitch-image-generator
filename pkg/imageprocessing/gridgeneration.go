@@ -26,7 +26,7 @@ func GenerateGrid(img image.Image, threadColors []common.ThreadColour) [][]strin
 	return grid
 }
 
-func GenerateColourGrid(img image.Image, threadColors []common.ThreadColour) [][]common.ThreadColour {
+func GenerateColourGrid(img image.Image, threadColors []common.ThreadColour, getNearestColour bool) [][]common.ThreadColour {
 	bounds := img.Bounds()
 	grid := make([][]common.ThreadColour, bounds.Dy())
 
@@ -34,12 +34,17 @@ func GenerateColourGrid(img image.Image, threadColors []common.ThreadColour) [][
 		row := make([]common.ThreadColour, bounds.Dx())
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			color := img.At(x, y).(color.RGBA)
-			row[x] = findThreadColorObj(color, threadColors)
+
+			if getNearestColour {
+				row[x] = findThreadColorObj(color, threadColors)
+			} else {
+				row[x] = common.ThreadColour{
+					Colour: color,
+				}
+			}
 		}
 		grid[y] = row
 	}
-
-	// fmt.Printf("size: %s %s", len(grid), len(grid[0]))
 
 	return grid
 }
