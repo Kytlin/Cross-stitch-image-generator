@@ -2,7 +2,6 @@ package imageprocessing
 
 import (
 	"bufio"
-	"fmt"
 	"image"
 	"image/color"
 	"log"
@@ -10,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Kytlin/Cross-stitch-image-generator/pkg/colourmath"
+	"github.com/Kytlin/Cross-stitch-image-generator/pkg/colormath"
 	"github.com/Kytlin/Cross-stitch-image-generator/pkg/common"
 )
 
-func createUnicodeCharMap(threadColors []common.ThreadColour) map[int]rune {
+func createUnicodeCharMap(threadColors []common.ThreadColor) map[int]rune {
 	unicodeMap := make(map[int]rune)
 	mapIdx := 0
 	threadColorsLength := len(threadColors)
@@ -35,11 +34,10 @@ func createUnicodeCharMap(threadColors []common.ThreadColour) map[int]rune {
 		}
 	}
 
-	fmt.Println(len(unicodeMap))
 	return unicodeMap
 }
 
-func ColourAtoi(s string) uint8 {
+func ColorAtoi(s string) uint8 {
 	i, err := strconv.Atoi(s)
 	if err != nil {
 		log.Printf("error converting string to int: %s", err)
@@ -48,7 +46,7 @@ func ColourAtoi(s string) uint8 {
 	return uint8(i)
 }
 
-func LoadThreadColours(filePath string) ([]common.ThreadColour, error) {
+func LoadThreadColors(filePath string) ([]common.ThreadColor, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Fatalf("failed to open file: %s", err)
@@ -57,7 +55,7 @@ func LoadThreadColours(filePath string) ([]common.ThreadColour, error) {
 
 	scanner := bufio.NewScanner(file)
 
-	var threadImg []common.ThreadColour
+	var threadImg []common.ThreadColor
 	for scanner.Scan() {
 		line := scanner.Text()
 
@@ -76,13 +74,13 @@ func LoadThreadColours(filePath string) ([]common.ThreadColour, error) {
 		}
 		name = strings.Join(parts[1:lineIdx], " ")
 
-		ThreadColour := common.ThreadColour{
-			ID:     id,
-			Name:   name,
-			Colour: color.RGBA{R: ColourAtoi(parts[lineIdx-1]), G: ColourAtoi(parts[lineIdx]), B: ColourAtoi(parts[lineIdx+1])},
+		ThreadColor := common.ThreadColor{
+			ID:    id,
+			Name:  name,
+			Color: color.RGBA{R: ColorAtoi(parts[lineIdx-1]), G: ColorAtoi(parts[lineIdx]), B: ColorAtoi(parts[lineIdx+1])},
 		}
 
-		threadImg = append(threadImg, ThreadColour)
+		threadImg = append(threadImg, ThreadColor)
 	}
 
 	dmcMap := createUnicodeCharMap(threadImg)
@@ -102,15 +100,15 @@ func LoadThreadColours(filePath string) ([]common.ThreadColour, error) {
 	return threadImg, err
 }
 
-func ReduceColors(img image.Image, palette []common.ThreadColour) image.Image {
+func ReduceColors(img image.Image, palette []common.ThreadColor) image.Image {
 	bounds := img.Bounds()
 	reducedImg := image.NewRGBA(bounds)
 
 	for y := bounds.Min.Y; y < bounds.Max.Y; y += 1 {
 		for x := bounds.Min.X; x < bounds.Max.X; x += 1 {
-			originalColour := img.At(x, y)
-			nearestColour := colourmath.NearestColour(originalColour, palette)
-			reducedImg.Set(x, y, nearestColour.Colour)
+			originalColor := img.At(x, y)
+			nearestColor := colormath.NearestColor(originalColor, palette)
+			reducedImg.Set(x, y, nearestColor.Color)
 		}
 	}
 

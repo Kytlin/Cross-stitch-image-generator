@@ -4,9 +4,9 @@ import (
 	"image/color"
 )
 
-type ThreadColour struct {
+type ThreadColor struct {
 	ID     int
 	Name   string
-	Colour color.RGBA
+	Color  color.RGBA
 	Symbol string
 }

@@ -1,4 +1,4 @@
-package colourmath
+package colormath
 
 import (
 	"image/color"
@@ -14,23 +14,23 @@ func colorDistance(rImg, gImg, bImg uint32, rPal, gPal, bPal uint8) float64 {
 			(bImg-uint32(bPal))*(bImg-uint32(bPal))))
 }
 
-func NearestColour(originalColour color.Color, palette []common.ThreadColour) common.ThreadColour {
-	rImg, gImg, bImg, _ := originalColour.RGBA()
+func NearestColor(originalColor color.Color, palette []common.ThreadColor) common.ThreadColor {
+	rImg, gImg, bImg, _ := originalColor.RGBA()
 	rImg, gImg, bImg = rImg>>8, gImg>>8, bImg>>8
 	minDistance := math.MaxFloat64
-	var nearestColour common.ThreadColour
+	var nearestColor common.ThreadColor
 
-	for _, threadColour := range palette {
-		rPal := uint8(threadColour.Colour.R)
-		gPal := uint8(threadColour.Colour.G)
-		bPal := uint8(threadColour.Colour.B)
+	for _, threadColor := range palette {
+		rPal := uint8(threadColor.Color.R)
+		gPal := uint8(threadColor.Color.G)
+		bPal := uint8(threadColor.Color.B)
 
 		distance := colorDistance(rImg, gImg, bImg, rPal, gPal, bPal)
 		if distance < minDistance {
 			minDistance = distance
-			nearestColour = threadColour
+			nearestColor = threadColor
 		}
 	}
 
-	return nearestColour
+	return nearestColor
 }

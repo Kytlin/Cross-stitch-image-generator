@@ -6,11 +6,11 @@ import (
 	"image/color"
 	"sort"
 
-	"github.com/Kytlin/Cross-stitch-image-generator/pkg/colourmath"
+	"github.com/Kytlin/Cross-stitch-image-generator/pkg/colormath"
 	"github.com/Kytlin/Cross-stitch-image-generator/pkg/common"
 )
 
-func GenerateGrid(img image.Image, threadColors []common.ThreadColour) [][]string {
+func GenerateGrid(img image.Image, threadColors []common.ThreadColor) [][]string {
 	bounds := img.Bounds()
 	grid := make([][]string, bounds.Dy())
 
@@ -26,17 +26,22 @@ func GenerateGrid(img image.Image, threadColors []common.ThreadColour) [][]strin
 	return grid
 }
 
-func GenerateColourGrid(img image.Image, threadColors []common.ThreadColour) [][]common.ThreadColour {
+func GenerateColorGrid(img image.Image, threadColors []common.ThreadColor, getNearestColor bool) [][]common.ThreadColor {
 	bounds := img.Bounds()
-	grid := make([][]common.ThreadColour, bounds.Dy())
+	grid := make([][]common.ThreadColor, bounds.Dy())
 
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		row := make([]common.ThreadColour, bounds.Dx())
+		row := make([]common.ThreadColor, bounds.Dx())
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			color := img.At(x, y).(color.RGBA)
 
-			row[x] = colourmath.NearestColour(color, threadColors)
-			fmt.Println(row[x].Colour)
+			if getNearestColor {
+				row[x] = colormath.NearestColor(color, threadColors)
+			} else {
+				row[x] = common.ThreadColor{ // symbol necessary here?
+					Color: color,
+				}
+			}
 		}
 		grid[y] = row
 	}
@@ -44,40 +49,40 @@ func GenerateColourGrid(img image.Image, threadColors []common.ThreadColour) [][
 	return grid
 }
 
-func findThreadColorName(c color.RGBA, threadColors []common.ThreadColour) string {
+func findThreadColorName(c color.RGBA, threadColors []common.ThreadColor) string {
 	for _, tc := range threadColors {
-		if tc.Colour == c {
+		if tc.Color == c {
 			return tc.Name
 		}
 	}
 	return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
 }
 
-// func findThreadColorObj(c color.RGBA, threadColors []common.ThreadColour) common.ThreadColour {
+// func findThreadColorObj(c color.RGBA, threadColors []common.ThreadColor) common.ThreadColor {
 // 	for _, tc := range threadColors {
-// 		if tc.Colour == c {
+// 		if tc.Color == c {
 // 			return tc
 // 		}
 // 	}
-// 	return colourmath.NearestColour(c, threadColors)
+// 	return colormath.NearestColor(c, threadColors)
 // }
 
-func GetPartialPalette(img image.Image, threadColours []common.ThreadColour, k int) []common.ThreadColour {
-	colorCounts := make(map[common.ThreadColour]int)
+func GetPartialPalette(img image.Image, threadColors []common.ThreadColor, k int) []common.ThreadColor {
+	colorCounts := make(map[common.ThreadColor]int)
 	bounds := img.Bounds()
 
 	// Count the occurrence of each color in the image
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			c := img.At(x, y)
-			threadColor := colourmath.NearestColour(c, threadColours)
+			threadColor := colormath.NearestColor(c, threadColors)
 			colorCounts[threadColor]++
 		}
 	}
 
 	// Create a slice of thread colors and sort by count
 	type colorCountPair struct {
-		Color common.ThreadColour
+		Color common.ThreadColor
 		Count int
 	}
 
@@ -90,7 +95,7 @@ func GetPartialPalette(img image.Image, threadColours []common.ThreadColour, k i
 	})
 
 	// Select up to k colors
-	var selectedColors []common.ThreadColour
+	var selectedColors []common.ThreadColor
 	for i := 0; i < len(sortedColors) && i < k; i++ {
 		selectedColors = append(selectedColors, sortedColors[i].Color)
 	}

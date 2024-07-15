@@ -29,9 +29,9 @@ import (
 
 var currentImage image.Image
 
-var showSymbol, useStich bool
+var showSymbol, useStitch bool
 
-var threadPalette []common.ThreadColour
+var threadPalette []common.ThreadColor
 var rectangles [][]*canvas.Rectangle
 
 // loadCustomFont reads and loads a TTF font from the given path.
@@ -88,10 +88,10 @@ func main() {
 	label := widget.NewLabel("Select a folder to upload an image:")
 
 	// HEIGHT
-	defaultHeight := 50.0
+	defaultHeight := 30.0
 	heightValue := binding.NewFloat()
 	heightValue.Set(defaultHeight)
-	heightSlider := widget.NewSliderWithData(20.0, 200.0, heightValue)
+	heightSlider := widget.NewSliderWithData(10.0, 50.0, heightValue)
 
 	// Custom label to display integer value
 	heightLabel := widget.NewLabelWithData(binding.NewString())
@@ -101,30 +101,30 @@ func main() {
 		heightLabel.SetText("Height:\t " + strconv.Itoa(intVal))
 	}))
 
-	// NUM COLOURS
-	defaultNumColours := 50.0
-	numColours := binding.NewFloat()
-	numColours.Set(defaultNumColours)
-	numColoursSlider := widget.NewSliderWithData(10.0, 200.0, numColours)
+	// NUM colorS
+	defaultNumColors := 30.0
+	numColors := binding.NewFloat()
+	numColors.Set(defaultNumColors)
+	numColorsSlider := widget.NewSliderWithData(10.0, 50.0, numColors)
 
 	// Custom label to display integer value
-	numColoursLabel := widget.NewLabelWithData(binding.NewString())
-	numColours.AddListener(binding.NewDataListener(func() {
-		floatVal, _ := numColours.Get()
+	numColorsLabel := widget.NewLabelWithData(binding.NewString())
+	numColors.AddListener(binding.NewDataListener(func() {
+		floatVal, _ := numColors.Get()
 		intVal := int(floatVal)
-		numColoursLabel.SetText("Number of Thread Colours: " + strconv.Itoa(intVal))
+		numColorsLabel.SetText("Number of Thread Colors: " + strconv.Itoa(intVal))
 	}))
 
-	gridDownloadChoice := widget.NewRadioGroup([]string{"Filled colour and symbol", "Filled colour", "X stitch"}, func(value string) {
-		if value == "Filled colour and symbol" {
+	gridDownloadChoice := widget.NewRadioGroup([]string{"Filled color and symbol", "Filled color", "X stitch"}, func(value string) {
+		if value == "Filled color and symbol" {
 			showSymbol = true
-			useStich = false
-		} else if value == "Filled colour" {
-			showSymbol = false
-			useStich = false
+			useStitch = false
 		} else if value == "X stitch" {
 			showSymbol = false
-			useStich = true
+			useStitch = true
+		} else {
+			showSymbol = false
+			useStitch = false
 		}
 	})
 
@@ -132,108 +132,99 @@ func main() {
 	imageCanvas := canvas.NewImageFromImage(nil)
 	imageCanvas.FillMode = canvas.ImageFillOriginal
 
+	// Create a placeholder for the legend table
 	legend := getLegend()
-	uploadButton, generateButton := getUploadAndGenerateButtons(heightSlider, heightLabel, numColoursSlider, numColoursLabel, legend, myWindow, imageCanvas, customFont)
+	uploadButton, resizeButton, generateButton := getUploadAndGenerateButtons(heightSlider, numColorsSlider, myWindow, imageCanvas, customFont)
 
 	myWindow.SetContent(container.NewVBox(
 		label,
 		heightLabel,
 		heightSlider,
-		numColoursLabel,
-		numColoursSlider,
+		numColorsLabel,
+		numColorsSlider,
 		gridDownloadChoice,
 		uploadButton,
-		// updateButton,
+		resizeButton,
 		generateButton,
 		imageCanvas,
 		legend,
-		// unicodeLabel,
 	))
 
 	myWindow.Resize(fyne.NewSize(1400, 800))
 	myWindow.ShowAndRun()
 }
 
-func getUploadAndGenerateButtons(heightSlider *widget.Slider, heightEntry *widget.Label, numColoursSlider *widget.Slider, numColoursEntry *widget.Label, legend fyne.CanvasObject, myWindow fyne.Window, imageCanvas *canvas.Image, customFont []byte) (fyne.CanvasObject, fyne.CanvasObject) {
+func getUploadAndGenerateButtons(heightSlider *widget.Slider, numColorsSlider *widget.Slider, myWindow fyne.Window, imageCanvas *canvas.Image, customFont []byte) (fyne.CanvasObject, fyne.CanvasObject, fyne.CanvasObject) {
 	currentDir, _ := os.Getwd()
 	curUri := storage.NewFileURI(currentDir)
 	uri, _ := storage.ListerForURI(curUri)
 	_ = curUri
 
 	// Upload
-	uploadButton := widget.NewButton("Select Folder or Resize Image", func() {
-		if imageCanvas.Image != nil {
-			// Image is already loaded, resize it
-			currentImage = imageprocessing.ResizeImage(currentImage, int(heightSlider.Value))
+	uploadButton := widget.NewButton("Select Folder", func() {
+		fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil {
+				dialog.ShowError(err, myWindow)
+				return
+			}
+			if reader == nil {
+				return
+			}
+			defer reader.Close()
 
-			// Display the resized image on the canvas
-			colourGrid := imageprocessing.GenerateColourGrid(currentImage, []common.ThreadColour{})
-			gridImage := generateImageFromGrid(colourGrid, showSymbol, useStich, customFont)
+			fmt.Println("Selected file:", reader.URI().Path())
+			imagePath := reader.URI().Path()
+			imageFile, err := os.Open(imagePath)
+			if err != nil {
+				dialog.ShowError(err, myWindow)
+				return
+			}
+
+			decodedImg, _, err := image.Decode(imageFile)
+			if err != nil {
+				dialog.ShowError(err, myWindow)
+				return
+			}
+
+			currentImage = decodedImg
+
+			// Process image based on height input
+			processedImage := imageprocessing.ResizeImage(currentImage, int(heightSlider.Value))
+
+			// Display image on canvas
+			colorGrid := imageprocessing.GenerateColorGrid(processedImage, []common.ThreadColor{}, false)
+			gridImage := generateImageFromGrid(colorGrid, false, false, customFont)
 
 			imageCanvas.Image = gridImage
-
-			// Resize the canvas widget itself
-			imageCanvas.Resize(fyne.NewSize(float32(currentImage.Bounds().Dx()), float32(heightSlider.Value)))
-
-			// Refresh the canvas
 			imageCanvas.Refresh()
-		} else {
-			// No image loaded, open the file dialog
-			fileDialog := dialog.NewFileOpen(func(reader fyne.URIReadCloser, err error) {
-				if err != nil {
-					dialog.ShowError(err, myWindow)
-					return
-				}
-				if reader == nil {
-					return
-				}
-				defer reader.Close()
+		}, myWindow)
+		fileDialog.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".jpg", ".jpeg"}))
+		fileDialog.SetLocation(uri)
+		fileDialog.Show()
+	})
 
-				fmt.Println("Selected file:", reader.URI().Path())
-				imagePath := reader.URI().Path()
-				imageFile, err := os.Open(imagePath)
-				if err != nil {
-					dialog.ShowError(err, myWindow)
-					return
-				}
-
-				decodedImg, _, err := image.Decode(imageFile)
-				if err != nil {
-					dialog.ShowError(err, myWindow)
-					return
-				}
-
-				currentImage = decodedImg
-
-				// Set the image and initial size of the canvas.Image widget
-				imageCanvas.Image = currentImage
-				imageCanvas.SetMinSize(fyne.NewSize(float32(currentImage.Bounds().Dx()), float32(heightSlider.Value)))
-
-				// Resize the image
-				currentImage = imageprocessing.ResizeImage(currentImage, int(heightSlider.Value))
-
-				// Display the resized image on the canvas
-				colourGrid := imageprocessing.GenerateColourGrid(currentImage, []common.ThreadColour{})
-				gridImage := generateImageFromGrid(colourGrid, showSymbol, useStich, customFont)
-
-				imageCanvas.Image = gridImage
-
-				// Resize the canvas widget itself
-				imageCanvas.Resize(fyne.NewSize(float32(currentImage.Bounds().Dx()), float32(heightSlider.Value)))
-
-				// Refresh the canvas
-				imageCanvas.Refresh()
-			}, myWindow)
-			fileDialog.SetFilter(storage.NewExtensionFileFilter([]string{".png", ".jpg", ".jpeg"}))
-			fileDialog.SetLocation(uri)
-			fileDialog.Show()
+	// Resize
+	resizeButton := widget.NewButton("Resize Image", func() {
+		if currentImage == nil {
+			dialog.ShowError(fmt.Errorf("No image loaded"), myWindow)
+			return
 		}
+
+		// Resize the image
+		resizedImage := imageprocessing.ResizeImage(currentImage, int(heightSlider.Value))
+
+		// Display image on canvas
+		colorGrid := imageprocessing.GenerateColorGrid(resizedImage, []common.ThreadColor{}, false)
+		gridImage := generateImageFromGrid(colorGrid, showSymbol, useStitch, customFont)
+
+		imageCanvas.Image = gridImage
+		imageCanvas.Refresh()
 	})
 
 	// Generate
 	generateButton := widget.NewButton("Generate", func() {
 		imgHeight := heightSlider.Value
-		numColours := numColoursSlider.Value
+		numColors := numColorsSlider.Value
 
 		if currentImage == nil {
 			dialog.ShowError(fmt.Errorf("No image loaded"), myWindow)
@@ -241,38 +232,34 @@ func getUploadAndGenerateButtons(heightSlider *widget.Slider, heightEntry *widge
 		}
 
 		resizedImg := imageprocessing.ResizeImage(currentImage, int(imgHeight))
-		threadColours, err := imageprocessing.LoadThreadColours("assets/thread_colours.txt")
+		threadColors, err := imageprocessing.LoadThreadColors("assets/thread_colors.txt")
 		if err != nil {
-			dialog.ShowError(fmt.Errorf("Failed to load thread colours"), myWindow)
+			dialog.ShowError(fmt.Errorf("Failed to load thread colors"), myWindow)
 			return
 		}
 
-		threadPalette = imageprocessing.GetPartialPalette(resizedImg, threadColours, int(numColours))
+		threadPalette = imageprocessing.GetPartialPalette(resizedImg, threadColors, int(numColors))
 		reducedImg := imageprocessing.ReduceColors(resizedImg, threadPalette)
 
-		fmt.Println(threadPalette)
-
-		// Ensure the resized and color-reduced image is displayed correctly
-		imageCanvas.Image = resizedImg
-
-		colourGrid := imageprocessing.GenerateColourGrid(reducedImg, threadColours)
-		gridImage := generateImageFromGrid(colourGrid, showSymbol, useStich, customFont)
-		updateGrid(colourGrid)
-
-		saveImagetoFiles(reducedImg, colourGrid, threadColours, myWindow, customFont)
+		// Display the resized and color-reduced image on canvas
+		colorGrid := imageprocessing.GenerateColorGrid(reducedImg, threadColors, true)
+		gridImage := generateImageFromGrid(colorGrid, showSymbol, useStitch, customFont)
+		updateGrid(colorGrid)
 
 		imageCanvas.Image = gridImage
 
 		imageCanvas.Refresh()
-		legend = getLegend()
+
+		legend := getLegend()
 		legend.Refresh()
 
-		currentImage = reducedImg
+		// Save the generated images
+		saveGeneratedImages(resizedImg, threadColors, customFont, myWindow)
 
-		dialog.ShowInformation("Success", "Image processed successfully", myWindow)
+		dialog.ShowInformation("Success", "Image processed and saved successfully", myWindow)
 	})
 
-	return uploadButton, generateButton
+	return uploadButton, resizeButton, generateButton
 }
 
 func getLegend() fyne.CanvasObject {
@@ -286,7 +273,7 @@ func getLegend() fyne.CanvasObject {
 		},
 		func() fyne.CanvasObject {
 			// Create a new label for each cell
-			return container.NewVBox(widget.NewLabel(""), canvas.NewRectangle(color.Black))
+			return container.NewHBox(widget.NewLabel(""), canvas.NewRectangle(color.Black))
 		},
 		func(id widget.TableCellID, o fyne.CanvasObject) {
 			l := o.(*fyne.Container).Objects[0].(*widget.Label)
@@ -304,9 +291,9 @@ func getLegend() fyne.CanvasObject {
 					l.SetText(threadPalette[id.Row].Name)
 				case 3:
 					l.Hide()
-					colour := threadPalette[id.Row].Colour
-					colour.A = 255
-					i.FillColor = colour
+					color := threadPalette[id.Row].Color
+					color.A = 255
+					i.FillColor = color
 					i.SetMinSize(fyne.NewSize(20, 20))
 					i.Show()
 				}
@@ -320,19 +307,27 @@ func getLegend() fyne.CanvasObject {
 
 	// Create header for the table
 	legend.CreateHeader = func() fyne.CanvasObject {
-		return widget.NewButton("", func() {})
+		return container.NewHBox(
+			widget.NewLabel("Symbol"),
+			widget.NewLabel("Number"),
+			widget.NewLabel("Name"),
+			widget.NewLabel("Color"),
+		)
 	}
+
 	legend.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		b := o.(*widget.Button)
+		hbox := o.(*fyne.Container)
+		label := hbox.Objects[id.Col].(*widget.Label)
 		switch id.Col {
 		case 0:
-			b.SetText("Symbol")
+			label.SetText("Symbol")
 		case 1:
-			b.SetText("Number")
+			label.SetText("Number")
 		case 2:
-			b.SetText("Name")
+			label.SetText("Name")
+		case 3:
+			label.SetText("Color")
 		}
-		b.Refresh()
 	}
 
 	// Scroll container to make table height adjustable
@@ -342,7 +337,7 @@ func getLegend() fyne.CanvasObject {
 	return scrollContainer
 }
 
-func generateImageFromGrid(grid [][]common.ThreadColour, showSymbol bool,
+func generateImageFromGrid(grid [][]common.ThreadColor, showSymbol bool,
 	useStitch bool, customFont []byte) image.Image {
 	numRows := len(grid)
 	numCols := len(grid[0])
@@ -359,10 +354,10 @@ func generateImageFromGrid(grid [][]common.ThreadColour, showSymbol bool,
 			x := col * cellSize
 			y := row * cellSize
 
-			cellColor := cell.Colour
+			cellColor := cell.Color
 			cellColor.A = 255
 
-			if useStich {
+			if useStitch {
 				stitchThickness := 3
 
 				for i := 0; i < cellSize; i++ {
@@ -387,14 +382,14 @@ func generateImageFromGrid(grid [][]common.ThreadColour, showSymbol bool,
 				})
 				defer face.Close()
 
-				fontColour := image.White
-				if (float32(cell.Colour.R)*0.299 + float32(cell.Colour.G)*0.587 + float32(cell.Colour.B)*0.114) > 186 {
-					fontColour = image.Black
+				fontColor := image.White
+				if (float32(cell.Color.R)*0.299 + float32(cell.Color.G)*0.587 + float32(cell.Color.B)*0.114) > 186 {
+					fontColor = image.Black
 				}
 
 				drawer := &font.Drawer{
 					Dst:  img,
-					Src:  fontColour,
+					Src:  fontColor,
 					Face: face,
 				}
 				drawer.Dot = fixed.Point26_6{
@@ -418,49 +413,58 @@ func generateImageFromGrid(grid [][]common.ThreadColour, showSymbol bool,
 	return img
 }
 
-func saveImagetoFiles(img image.Image, grid [][]common.ThreadColour, threadColours []common.ThreadColour, myWindow fyne.Window, customFont []byte) {
+func saveGeneratedImages(img image.Image, threadColors []common.ThreadColor, customFont []byte, myWindow fyne.Window) {
+	basePath := "output/"
+	err := os.MkdirAll(basePath, os.ModePerm)
+	if err != nil {
+		dialog.ShowError(fmt.Errorf("Failed to create output directory"), myWindow)
+		return
+	}
+
 	types := []struct {
 		showSymbol bool
 		useStitch  bool
 		name       string
 	}{
-		{true, false, "filled_colour_and_symbol.png"},
-		{false, false, "filled_colour.png"},
-		{false, true, "x_stitch.png"},
+		{true, false, "filled_color_and_symbol.jpg"},
+		{false, false, "filled_color.jpg"},
+		{false, true, "x_stitch.jpg"},
 	}
 
 	for _, t := range types {
-		colourGrid := imageprocessing.GenerateColourGrid(img, threadColours)
-		gridImage := generateImageFromGrid(colourGrid, t.showSymbol, t.useStitch, customFont)
+		colorGrid := imageprocessing.GenerateColorGrid(img, threadColors, true)
+		gridImage := generateImageFromGrid(colorGrid, t.showSymbol, t.useStitch, customFont)
 
-		file, err := os.Create(t.name)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-		defer file.Close()
-
-		err = jpeg.Encode(file, gridImage, nil)
-		if err != nil {
-			dialog.ShowError(fmt.Errorf("Failed to encode image to cross stitch files"), myWindow)
-		}
+		saveImageToFile(gridImage, basePath+t.name)
 	}
-
-	fmt.Println("Cross stitch files created successfully")
 }
 
-func updateRectangleColor(row, col int, threadColour common.ThreadColour) {
+func saveImageToFile(img image.Image, pathname string) {
+	file, err := os.Create(pathname)
+	if err != nil {
+		fmt.Println("Failed to save image:", err)
+		return
+	}
+	defer file.Close()
+
+	err = jpeg.Encode(file, img, nil)
+	if err != nil {
+		fmt.Println("Failed to encode image:", err)
+	}
+}
+
+func updateRectangleColor(row, col int, threadColor common.ThreadColor) {
 	if row >= 0 && row < len(rectangles) && col >= 0 && col < len(rectangles[row]) {
-		r, g, b, _ := threadColour.Colour.RGBA()
+		r, g, b, _ := threadColor.Color.RGBA()
 		rectangles[row][col].FillColor = color.RGBA{uint8(r), uint8(g), uint8(b), 255}
 		rectangles[row][col].Refresh() // Refresh to apply the color change
 	}
 }
 
-func updateGrid(colours [][]common.ThreadColour) {
-	for i := 0; i < len(colours); i++ {
-		for j := 0; j < len(colours[i]); j++ {
-			updateRectangleColor(i, j, colours[i][j])
+func updateGrid(colors [][]common.ThreadColor) {
+	for i := 0; i < len(colors); i++ {
+		for j := 0; j < len(colors[i]); j++ {
+			updateRectangleColor(i, j, colors[i][j])
 		}
 	}
 }
