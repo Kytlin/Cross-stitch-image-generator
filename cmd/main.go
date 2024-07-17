@@ -133,10 +133,12 @@ func main() {
 	imageCanvas.FillMode = canvas.ImageFillOriginal
 
 	// Create a placeholder for the legend table
-	legend := getLegend()
-	uploadButton, resizeButton, generateButton := getUploadAndGenerateButtons(heightSlider, numColorsSlider, myWindow, imageCanvas, customFont)
+	legendContainer := container.NewVBox()
+	legendContainer.Hide()
 
-	myWindow.SetContent(container.NewVBox(
+	uploadButton, resizeButton, generateButton := getUploadAndGenerateButtons(heightSlider, numColorsSlider, myWindow, imageCanvas, customFont, legendContainer)
+
+	myWindow.SetContent(container.NewScroll(container.NewVBox(
 		label,
 		heightLabel,
 		heightSlider,
@@ -147,14 +149,14 @@ func main() {
 		resizeButton,
 		generateButton,
 		imageCanvas,
-		legend,
-	))
+		legendContainer,
+	)))
 
 	myWindow.Resize(fyne.NewSize(1400, 800))
 	myWindow.ShowAndRun()
 }
 
-func getUploadAndGenerateButtons(heightSlider *widget.Slider, numColorsSlider *widget.Slider, myWindow fyne.Window, imageCanvas *canvas.Image, customFont []byte) (fyne.CanvasObject, fyne.CanvasObject, fyne.CanvasObject) {
+func getUploadAndGenerateButtons(heightSlider *widget.Slider, numColorsSlider *widget.Slider, myWindow fyne.Window, imageCanvas *canvas.Image, customFont []byte, legendContainer *fyne.Container) (fyne.CanvasObject, fyne.CanvasObject, fyne.CanvasObject) {
 	currentDir, _ := os.Getwd()
 	curUri := storage.NewFileURI(currentDir)
 	uri, _ := storage.ListerForURI(curUri)
@@ -247,11 +249,13 @@ func getUploadAndGenerateButtons(heightSlider *widget.Slider, numColorsSlider *w
 		updateGrid(colorGrid)
 
 		imageCanvas.Image = gridImage
-
 		imageCanvas.Refresh()
 
+		// Update and show the legend
 		legend := getLegend()
-		legend.Refresh()
+		legendContainer.Objects = []fyne.CanvasObject{legend}
+		legendContainer.Show()
+		legendContainer.Refresh()
 
 		// Save the generated images
 		saveGeneratedImages(resizedImg, threadColors, customFont, myWindow)
@@ -263,7 +267,7 @@ func getUploadAndGenerateButtons(heightSlider *widget.Slider, numColorsSlider *w
 }
 
 func getLegend() fyne.CanvasObject {
-	legend := widget.NewTable(
+	legend := widget.NewTableWithHeaders(
 		func() (int, int) {
 			// Returning the number of rows and columns
 			if threadPalette == nil {
@@ -307,22 +311,16 @@ func getLegend() fyne.CanvasObject {
 
 	// Create header for the table
 	legend.CreateHeader = func() fyne.CanvasObject {
-		return container.NewHBox(
-			widget.NewLabel("Symbol"),
-			widget.NewLabel("Number"),
-			widget.NewLabel("Name"),
-			widget.NewLabel("Color"),
-		)
+		return widget.NewLabel(" ")
 	}
 
 	legend.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		hbox := o.(*fyne.Container)
-		label := hbox.Objects[id.Col].(*widget.Label)
+		label := o.(*widget.Label)
 		switch id.Col {
 		case 0:
 			label.SetText("Symbol")
 		case 1:
-			label.SetText("Number")
+			label.SetText("Thread ID")
 		case 2:
 			label.SetText("Name")
 		case 3:
