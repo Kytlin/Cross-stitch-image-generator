@@ -1,6 +1,20 @@
 # Cross Stitch Generator
 
-This desktop app was created using Go Fyne library. Run `go run cmd/main.go` to start app.
+This desktop app was created using Go Fyne library. Run `go run cmd/main.go` to start app. Here is an example image followed by its cross stitched versions generated from app:
+
+<br>
+
+<center>
+    <img src="lavender_field.jpeg" style="width:50%">
+</center>
+
+<br>
+
+<p float="left">
+    <img src="output/filled_color.jpg" style="width:30%;padding:0.5em">
+    <img src="output/filled_color_and_symbol.jpg" style="width:30%;padding:0.5em">
+    <img src="output/x_stitch.jpg" style="width:30%;padding:0.5em">
+</p>
 
 First, the app needs to know which image you want. This can be done by clicking "Select Folder" button and navigating through internal file explorer of one's local machine (image file types supported are `jpeg`/`jpg` or `png`). To resize image, one adjusts the "Height" slider and clicks "Resize" button; width is automatically determined based on image aspect ratio. One can adjust "Number of Color" slider to display the image as a grid using the specified amount of colors, which is accomplished by [color quantization](https://en.wikipedia.org/wiki/Color_quantization#:~:text=In%20computer%20graphics%2C%20color%20quantization,possible%20to%20the%20original%20image.). 
 
