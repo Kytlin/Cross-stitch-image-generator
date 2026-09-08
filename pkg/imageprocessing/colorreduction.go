@@ -2,9 +2,9 @@ package imageprocessing
 
 import (
 	"bufio"
+	"fmt"
 	"image"
 	"image/color"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -37,50 +37,71 @@ func createUnicodeCharMap(threadColors []common.ThreadColor) map[int]rune {
 	return unicodeMap
 }
 
-func ColorAtoi(s string) uint8 {
-	i, err := strconv.Atoi(s)
+// minThreadColorFields is the smallest usable line: an id, a single name field,
+// then the trailing R, G, B and hex values.
+const minThreadColorFields = 6
+
+func parseColorComponent(s string) (uint8, error) {
+	i, err := strconv.ParseUint(s, 10, 8)
 	if err != nil {
-		log.Printf("error converting string to int: %s", err)
-		return 0
+		return 0, fmt.Errorf("invalid color component %q: %w", s, err)
 	}
-	return uint8(i)
+	return uint8(i), nil
 }
 
+// LoadThreadColors reads a tab separated thread list, one thread per line, in
+// the form "id<TAB>name<TAB>R<TAB>G<TAB>B<TAB>hex". A name may itself span
+// several tab separated fields, so the colors are read from the end of the line.
 func LoadThreadColors(filePath string) ([]common.ThreadColor, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		log.Fatalf("failed to open file: %s", err)
+		return nil, fmt.Errorf("failed to open file %q: %w", filePath, err)
 	}
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 
 	var threadImg []common.ThreadColor
-	for scanner.Scan() {
-		line := scanner.Text()
+	for lineNum := 1; scanner.Scan(); lineNum++ {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
 
-		// Find the last space before the integer
 		parts := strings.FieldsFunc(line, func(r rune) bool {
 			return r == '\t'
 		})
+		if len(parts) < minThreadColorFields {
+			return nil, fmt.Errorf("%s line %d: expected at least %d tab separated fields, got %d",
+				filePath, lineNum, minThreadColorFields, len(parts))
+		}
 
-		var name string
-		var id int
-		lineIdx := len(parts) - 3
+		// The last four fields are R, G, B and hex, so the name is everything
+		// between the id and those.
+		redIdx := len(parts) - 4
 
-		id, err = strconv.Atoi(parts[0])
+		id, err := strconv.Atoi(parts[0])
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("%s line %d: invalid thread id %q: %w", filePath, lineNum, parts[0], err)
 		}
-		name = strings.Join(parts[1:lineIdx], " ")
 
-		ThreadColor := common.ThreadColor{
+		var rgb [3]uint8
+		for i := range rgb {
+			rgb[i], err = parseColorComponent(parts[redIdx+i])
+			if err != nil {
+				return nil, fmt.Errorf("%s line %d: %w", filePath, lineNum, err)
+			}
+		}
+
+		threadImg = append(threadImg, common.ThreadColor{
 			ID:    id,
-			Name:  name,
-			Color: color.RGBA{R: ColorAtoi(parts[lineIdx-1]), G: ColorAtoi(parts[lineIdx]), B: ColorAtoi(parts[lineIdx+1])},
-		}
+			Name:  strings.Join(parts[1:redIdx], " "),
+			Color: color.RGBA{R: rgb[0], G: rgb[1], B: rgb[2]},
+		})
+	}
 
-		threadImg = append(threadImg, ThreadColor)
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading file %q: %w", filePath, err)
 	}
 
 	dmcMap := createUnicodeCharMap(threadImg)
@@ -88,16 +109,7 @@ func LoadThreadColors(filePath string) ([]common.ThreadColor, error) {
 		threadImg[i].Symbol = string(dmcMap[threadImg[i].ID])
 	}
 
-	// dmcMapLength := len(dmcMap)
-
-	// for i := 0; i <= dmcMapLength; i++ {
-	// 	threadImg[i].Symbol = string(dmcMap[i])
-	// }
-
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("error reading file: %s", err)
-	}
-	return threadImg, err
+	return threadImg, nil
 }
 
 func ReduceColors(img image.Image, palette []common.ThreadColor) image.Image {

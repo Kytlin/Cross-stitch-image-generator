@@ -236,7 +236,7 @@ func getUploadAndGenerateButtons(heightSlider *widget.Slider, numColorsSlider *w
 		resizedImg := imageprocessing.ResizeImage(currentImage, int(imgHeight))
 		threadColors, err := imageprocessing.LoadThreadColors("assets/thread_colors.txt")
 		if err != nil {
-			dialog.ShowError(fmt.Errorf("Failed to load thread colors"), myWindow)
+			dialog.ShowError(fmt.Errorf("Failed to load thread colors: %w", err), myWindow)
 			return
 		}
 
@@ -258,7 +258,7 @@ func getUploadAndGenerateButtons(heightSlider *widget.Slider, numColorsSlider *w
 		legendContainer.Refresh()
 
 		// Save the generated images
-		saveGeneratedImages(resizedImg, threadColors, customFont, myWindow)
+		saveGeneratedImages(reducedImg, threadColors, customFont, myWindow)
 
 		dialog.ShowInformation("Success", "Image processed and saved successfully", myWindow)
 	})
@@ -335,6 +335,20 @@ func getLegend() fyne.CanvasObject {
 	return scrollContainer
 }
 
+// newFontFace parses the given TTF bytes into a face sized to fit one grid cell.
+func newFontFace(customFont []byte, cellSize int) (font.Face, error) {
+	fnt, err := opentype.Parse(customFont)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse font: %w", err)
+	}
+
+	return opentype.NewFace(fnt, &opentype.FaceOptions{
+		Size:    float64(cellSize),
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+}
+
 func generateImageFromGrid(grid [][]common.ThreadColor, showSymbol bool,
 	useStitch bool, customFont []byte) image.Image {
 	numRows := len(grid)
@@ -345,6 +359,19 @@ func generateImageFromGrid(grid [][]common.ThreadColor, showSymbol bool,
 	imgHeight := numRows * cellSize
 
 	img := image.NewRGBA(image.Rect(0, 0, imgWidth, imgHeight))
+
+	// Parse the font once for the whole image rather than once per cell
+	var drawer *font.Drawer
+	if showSymbol {
+		face, err := newFontFace(customFont, cellSize)
+		if err != nil {
+			fmt.Println("Failed to load font, skipping symbols:", err)
+			showSymbol = false
+		} else {
+			defer face.Close()
+			drawer = &font.Drawer{Dst: img, Face: face}
+		}
+	}
 
 	for row := 0; row < numRows; row++ {
 		for col := 0; col < numCols; col++ {
@@ -372,24 +399,12 @@ func generateImageFromGrid(grid [][]common.ThreadColor, showSymbol bool,
 			}
 
 			if showSymbol {
-				fnt, _ := opentype.Parse(customFont)
-				face, _ := opentype.NewFace(fnt, &opentype.FaceOptions{
-					Size:    float64(cellSize),
-					DPI:     72,
-					Hinting: font.HintingFull,
-				})
-				defer face.Close()
-
 				fontColor := image.White
 				if (float32(cell.Color.R)*0.299 + float32(cell.Color.G)*0.587 + float32(cell.Color.B)*0.114) > 186 {
 					fontColor = image.Black
 				}
 
-				drawer := &font.Drawer{
-					Dst:  img,
-					Src:  fontColor,
-					Face: face,
-				}
+				drawer.Src = fontColor
 				drawer.Dot = fixed.Point26_6{
 					X: fixed.I(x + cellSize/4),
 					Y: fixed.I(y + cellSize - cellSize/4),
